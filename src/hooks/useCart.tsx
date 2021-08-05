@@ -28,11 +28,8 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
     if (storagedCart) {
       return JSON.parse(storagedCart);
     }
-
     return [];
   });
-
-  
 
   const addProduct = async (productId: number) => {
     try {
@@ -40,12 +37,18 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
       if(productFound){
         updateProductAmount({productId, amount:productFound.amount + 1});
       }else {
-        api.get(`/products/${productId}`).then(response =>{
-          const product :Product = {...response.data, amount:1};
+        const stock = await api.get(`/stock/${productId}`);
+        const stockAmount = stock.data.amount;
+
+        if(stockAmount >= 1){
+          const productData = await api.get(`/products/${productId}`);
+          const product :Product = {...productData.data, amount:1};
           const newCart = [...cart, product];
           localStorage.setItem('@RocketShoes:cart',JSON.stringify(newCart));
           setCart(newCart);
-        })
+        }else {
+          toast.error('Quantidade solicitada fora de estoque');
+        }
       }
     } catch {
       toast.error('Erro na adição do produto');
@@ -54,11 +57,15 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
 
   const removeProduct = (productId: number) => {
     try {
-      const newCart = cart.filter(product =>
-        product.id !== productId
-      )
-      localStorage.setItem('@RocketShoes:cart',JSON.stringify(newCart));
-      setCart(newCart);
+      const newCart = [...cart];
+      const productIndex = newCart.findIndex(product => product.id === productId);
+      if(productIndex >= 0){
+        newCart.splice(productIndex,1);
+        localStorage.setItem('@RocketShoes:cart',JSON.stringify(newCart));
+        setCart(newCart);
+      }else {
+        throw Error();
+      }
     } catch {
       toast.error('Erro na remoção do produto');
     }
@@ -72,23 +79,21 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
       if(amount <= 0){
         return;
       }
-      api.get(`/stock/${productId}`).then(response => {
-        const stock:Stock = response.data;
+      const stock = await api.get(`/stock/${productId}`);
+      const stockAmount = stock.data.amount;
 
-        if(stock.amount >= amount){
-
-          const newCart = cart.map(product => {
-            return product.id===productId ? 
-              {...product , 'amount':amount}:
-              product
-          });
-          localStorage.setItem('@RocketShoes:cart',JSON.stringify(newCart));
-          setCart(newCart);
-        }else{
-          toast.error('Quantidade solicitada fora de estoque');
-        }
-      })
-
+      if(stockAmount >= amount){
+        const newCart = cart.map(product => {
+          return product.id===productId ? 
+            {...product , 'amount':amount}:
+            product
+        });
+        localStorage.setItem('@RocketShoes:cart',JSON.stringify(newCart));
+        setCart(newCart);
+      }else{
+        toast.error('Quantidade solicitada fora de estoque');
+      }
+      
     } catch {
       toast.error('Erro na alteração de quantidade do produto');
     }
